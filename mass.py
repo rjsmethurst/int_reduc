@@ -22,13 +22,9 @@ def calc_ur(psf_u, psfErr_u, psf_r, psfErr_r, petro_u, petroErr_u, petro_r, petr
 	Err_r = (psfErr_r **2 + petroErr_r**2) ** 0.5
 	ur = u - r
 	Err_ur = (Err_u **2 + Err_r**2) ** 0.5
-	return ur, Err_ur, r
+	return ur, Err_ur, petro_r
 
 def bhmass(z, flux, fwhm):
-    print 'z ', z
-    print 'c ', c
-    print 'H0 ', H0
-    print 'mpc ', mpc
     #d = cosmo.comoving_distance(z).value * mpc * 100 # distance in centimetres
     d = (z*c)/H0 * mpc * 100 # distance in centimeters
     print 'distance', d
@@ -49,7 +45,10 @@ def calc_fwhm(wave, emission):
     fidx = N.argmin(idx[:i])
     sidx = N.argmin(idx[i:]) + i
     fwhm = wave[sidx] - wave[fidx]
-    return fwhm
+    return fidx, sidx, fwhm
+
+def gauss(a, u, s, wave):
+        return a * N.exp(- (((wave - u)**2) /(s**2)))
 
 sdss = N.genfromtxt('/Volumes/Data/smethurst/observing/la_palma/int_reduc/result.csv', delimiter=',', skip_header=True)
 
@@ -57,6 +56,7 @@ sourceList = ['Q078017', 'Q507953', 'Q464967', 'Q292635', 'Q186225']
 sourceID = ['1237679457600078017', '1237666245208507953', '1237668631602464967', '1237662981045292635', '1237671688011186225']
 target_flux = [11.34, 50.72, 36.55, 70.92, 672.08]
 target_fwhm = [0.3, 2.92, 9.51, 6.61, 24.90]
+emission_fwhm = [0.3, 2.92, 9.51, 6.61, 24.90]
 target_I_v0 = N.zeros(len(sourceList))
 
 sdss = N.append(sdss, N.zeros((5,6)), axis=1)
@@ -83,25 +83,38 @@ for n in range(len(z)):
     z[n] = (ml/6562.8) - 1
     print 'lambda value', ml
     print 'z = ',z[n]
-    sdss[n,13] = z[n]   
+    sdss[n,17] = z[n]   
 
 for n in range(len(sourceList)):
-    ur, Err_ur, r = sdss[n, -5:-2] = calc_ur(sdss[n,5], sdss[n,6], sdss[n, 7], sdss[n,8], sdss[n,9], sdss[n,10], sdss[n,11], sdss[n,12])
-    if sdss[n, -5] <= 2.1:
-    	log_m_l = -0.95 + 0.56 * sdss[n, -5]
+    ur, Err_ur, r = sdss[n, -5:-2] = calc_ur(sdss[n,5], sdss[n,6], sdss[n, 7], sdss[n,8], sdss[n,13], sdss[n,14], sdss[n,15], sdss[n,16])
+    print 'ur ', ur
+    if ur <= 2.1:
+    	log_m_l = -0.95 + 0.56 * ur
     else:
-        log_m_l = -0.16 + 0.18 * sdss[n, -5]
-    ld = cosmo.luminosity_distance(sdss[n,13]).value
+        log_m_l = -0.16 + 0.18 * ur
+    ld = cosmo.luminosity_distance(sdss[n,17]).value * 1E6
     Mr = r - 5 * (N.log10(ld) - 1)
+    print 'Mr ', Mr
     m_msun = sdss[n, -2] = ((4.62 - Mr)/2.5) + log_m_l
     bf = F.open('/Volumes/Data/smethurst/idl/gandalf_release_v1.5/SDSS_example/'+sourceList[n]+'_extract_agn_deredshift_rebin_header_units_GANDALF_fits.fits')
     hdr = bf[0].header
     emission = bf[2].data
     lam = hdr['crval1'] + hdr['cd1_1']*(N.arange(hdr['naxis1'] - hdr['crpix1']))
     wave = 10**lam
-    target_fwhm[n] = calc_fwhm(wave, emission)
-    bh_masses[n] = sdss[n, -1] = bhmass(sdss[n,13], target_I_v0[n], target_fwhm[n])
+    if sourceList[n] == 'Q078017':
+        target_fwhm[n] = calc_fwhm(wave, emission)
+    if sourceList[n] = 'Q507953'
+        target_fwhm[n] = calc_fwhm(wave, emission)
+    else:
+        bf = N.load('best_fit_'+source[n]+'.npy')
+        broad = gauss(bf[3][0], bf[4][0], bf[5][0], wave)
+        target_fwhm[n] = calc_fwhm(wave, broad)
+    print target_fwhm
+    emission_fwhm[n] = calc_fwhm(wave, emission)
+    print emission_fwhm
+    bh_masses[n] = sdss[n, -1] = bhmass(sdss[n,17], target_I_v0[n], target_fwhm[n])
 
+print 'u-r', sdss[:,-5]
 
 P.figure()
 P.scatter(sdss[:,-2], sdss[:,-1])
