@@ -13,16 +13,17 @@ msol = 1.989E30
 mpc = 3.08567758E16 * 1E6 # mpc in m
 c = 299792.458 #speed of light in km/s
 
-
+def mgal(mpet, psf):
+    return -2.5 * N.log10((10**(-mpet/2.5))-(10**(-psf/2.5)))
 
 def calc_ur(psf_u, psfErr_u, psf_r, psfErr_r, petro_u, petroErr_u, petro_r, petroErr_r):
-	u = petro_u - psf_u
-	Err_u = (psfErr_u **2 + petroErr_u**2) ** 0.5
-	r = petro_r - psf_r
-	Err_r = (psfErr_r **2 + petroErr_r**2) ** 0.5
-	ur = u - r
-	Err_ur = (Err_u **2 + Err_r**2) ** 0.5
-	return ur, Err_ur, petro_r
+        gal_u = mgal(petro_u, psf_u)
+        gal_r = mgal(petro_r, psf_r)
+        ur = gal_u - gal_r
+        Err_u = 1/((10**(-petro_u/2.5))-(10**(-psf_u/2.5))) * ( ((10**(-petro_u/2.5))*petroErr_u)**2 + ((10**(-psf_u/2.5))*psfErr_u)**2 )**(0.5)
+        Err_r = 1/((10**(-petro_r/2.5))-(10**(-psf_r/2.5))) * ( ((10**(-petro_r/2.5))*petroErr_r)**2 + ((10**(-psf_r/2.5))*psfErr_r)**2 )**(0.5)
+        Err_ur = ( (Err_u)**2 + (Err_r) )**(0.5)
+        return ur, Err_ur, gal_r
 
 def bhmass(z, flux, fwhm):
     #d = cosmo.comoving_distance(z).value * mpc * 100 # distance in centimetres
@@ -45,7 +46,7 @@ def calc_fwhm(wave, emission):
     fidx = N.argmin(idx[:i])
     sidx = N.argmin(idx[i:]) + i
     fwhm = wave[sidx] - wave[fidx]
-    return fidx, sidx, fwhm
+    return fwhm
 
 def gauss(a, u, s, wave):
         return a * N.exp(- (((wave - u)**2) /(s**2)))
@@ -86,7 +87,7 @@ for n in range(len(z)):
     sdss[n,17] = z[n]   
 
 for n in range(len(sourceList)):
-    ur, Err_ur, r = sdss[n, -5:-2] = calc_ur(sdss[n,5], sdss[n,6], sdss[n, 7], sdss[n,8], sdss[n,13], sdss[n,14], sdss[n,15], sdss[n,16])
+    ur, Err_ur, r = sdss[n, -5:-2] = calc_ur(sdss[n,5], sdss[n,6], sdss[n, 7], sdss[n,8], sdss[n,9], sdss[n,10], sdss[n,11], sdss[n,12])
     print 'ur ', ur
     if ur <= 2.1:
     	log_m_l = -0.95 + 0.56 * ur
@@ -103,10 +104,10 @@ for n in range(len(sourceList)):
     wave = 10**lam
     if sourceList[n] == 'Q078017':
         target_fwhm[n] = calc_fwhm(wave, emission)
-    if sourceList[n] = 'Q507953'
+    if sourceList[n] == 'Q507953':
         target_fwhm[n] = calc_fwhm(wave, emission)
     else:
-        bf = N.load('best_fit_'+source[n]+'.npy')
+        bf = N.load('best_fit_'+sourceList[n]+'.npy')
         broad = gauss(bf[3][0], bf[4][0], bf[5][0], wave)
         target_fwhm[n] = calc_fwhm(wave, broad)
     print target_fwhm
@@ -120,6 +121,7 @@ P.figure()
 P.scatter(sdss[:,-2], sdss[:,-1])
 P.xlabel(r'$log_{10}(M_{*}/M_{\odot})$')
 P.ylabel(r'$log_{10}(M_{BH}/M_{\odot})$')
+P.savefig('mass_bh_total_mass.pdf')
 P.show()
 
 
